@@ -6,8 +6,8 @@ WORKDIR /build
 COPY shard.yml shard.lock .
 RUN shards
 COPY src/ ./src/
-RUN crystal build src/bin.cr -o /bin/pr-org-stats
+RUN crystal build src/bin.cr -o /bin/gh-org-stats
 
 WORKDIR $HOME
 
-CMD ["/bin/pr-org-stats"]
+CMD ["/bin/gh-org-stats"]

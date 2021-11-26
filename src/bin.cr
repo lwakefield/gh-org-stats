@@ -19,5 +19,5 @@ end
 
 
 def print_help
-  puts "usage: pr-stats update <orgs> where orgs is comma separated"
+  puts "usage: gh-org-stats update <orgs> where orgs is comma separated"
 end
