@@ -1,7 +1,7 @@
 FROM crystallang/crystal:1.2.2-alpine
 
 WORKDIR /build
-COPY shard.yml shard.lock src .
+COPY shard.yml shard.lock src/ .
 RUN shards
 RUN crystal build --release src/bin.cr -o pr-org-stats
 
