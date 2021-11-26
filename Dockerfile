@@ -1,6 +1,6 @@
 FROM crystallang/crystal:1.2.2-alpine
 
-RUN apk update && apk install libsqlite3
+RUN apk update && apk add libsqlite3
 
 WORKDIR /build
 COPY shard.yml shard.lock .
