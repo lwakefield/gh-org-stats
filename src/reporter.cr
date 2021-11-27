@@ -46,12 +46,26 @@ class Reporter
     p90_time_to_merge = {} of String => Array(Tuple(Time, Time::Span | Nil))
     p50_time_to_merge = {} of String => Array(Tuple(Time, Time::Span | Nil))
 
+
     earliest.at_beginning_of_week.step(to: latest, by: 1.week) do |date|
       backbone << date
 
       merged_prs_per_repo.each do |key, val|
         prs = val.select do |pr|
           date <= pr[:merged_at] && pr[:merged_at] < date + 1.week
+        end
+
+        prs.each do |pr|
+          # puts "gh_pr.time_to_merge_seconds{owner=\"#{pr[:owner]}\",name=\"#{pr[:name]}\"} #{(pr[:merged_at] - pr[:opened_at]).total_seconds} #{pr[:merged_at].to_unix_ms}"
+          puts({
+            name: "test.gh_pr.time_to_merge_seconds",
+            tags: {
+              owner: pr[:owner],
+              name: pr[:name]
+            },
+            value: (pr[:merged_at] - pr[:opened_at]).total_seconds,
+            timestamp: pr[:merged_at].to_rfc3339
+          }.to_json)
         end
 
         merge_throughput[key] ||= [] of {Time, Int32}
@@ -72,84 +86,5 @@ class Reporter
         end
       end
     end
-
-    merge_throughput_table = Table.new
-    merge_throughput_table.cells << [""] + backbone.map(&.to_s)
-    merge_throughput.map do |repo, series|
-      merge_throughput_table.cells << [repo] + series.map { |v| v[1].to_s }
-    end
-
-    p90_time_to_merge_table = Table.new
-    p90_time_to_merge_table.cells << [""] + backbone.map(&.to_s)
-    p90_time_to_merge.map do |repo, series|
-      p90_time_to_merge_table.cells << [repo] + series.map do |v|
-        res = ""
-        if v[1]
-          res += "#{v[1].not_nil!.days}d" if v[1].not_nil!.days > 0
-          res += "#{v[1].not_nil!.hours}h" if v[1].not_nil!.hours > 0
-          res += "#{v[1].not_nil!.minutes}m" if v[1].not_nil!.minutes > 0
-        end
-        res
-      end
-    end
-
-    p50_time_to_merge_table = Table.new
-    p50_time_to_merge_table.cells << [""] + backbone.map(&.to_s)
-    p50_time_to_merge.map do |repo, series|
-      p50_time_to_merge_table.cells << [repo] + series.map do |v|
-        res = ""
-        if v[1]
-          res += "#{v[1].not_nil!.days}d" if v[1].not_nil!.days > 0
-          res += "#{v[1].not_nil!.hours}h" if v[1].not_nil!.hours > 0
-          res += "#{v[1].not_nil!.minutes}m" if v[1].not_nil!.minutes > 0
-        end
-        res
-      end
-    end
-
-    puts "# Merge Throughput\n\n"
-    puts merge_throughput_table.to_markdown
-    puts "\n"
-    puts "# p90 Time To Merge\n\n"
-    puts p90_time_to_merge_table.to_markdown
-    puts "\n"
-    puts "# p50 Time To Merge\n\n"
-    puts p50_time_to_merge_table.to_markdown
-    puts "\n"
-  end
-end
-
-class Table
-  # first row is the header
-  property cells : Array(Array(String))
-
-  def initialize
-    @cells = [] of Array(String)
-  end
-
-  def cell_widths
-    (0...cells.first.size).map do |i|
-      cells.map { |row| row[i].size }.max
-    end
-  end
-
-  def to_markdown
-    widths = cell_widths
-
-    res = ""
-
-    res += "| " + cells.first.map_with_index do |header, i|
-      header.ljust(widths[i])
-    end.join(" | ") + " |\n"
-
-    res += "|-" + widths.map { |w| "-" * w }.join("-|-") + "-|\n"
-
-    res += cells[1..].map do |row|
-      "| " + row.map_with_index do |cell, i|
-        cell.ljust(widths[i])
-      end.join(" | ") + " |"
-    end.join("\n")
-
-    res
   end
 end
