@@ -127,6 +127,7 @@ class Table
     @cells = [] of Array(String)
   end
 
+  # this makes it prettier, but inflates the file ~4x
   def cell_widths
     (0...cells.first.size).map do |i|
       cells.map { |row| row[i].size }.max
@@ -134,19 +135,17 @@ class Table
   end
 
   def to_markdown
-    widths = cell_widths
-
     res = ""
 
     res += "| " + cells.first.map_with_index do |header, i|
-      header.ljust(widths[i])
+      header
     end.join(" | ") + " |\n"
 
-    res += "|-" + widths.map { |w| "-" * w }.join("-|-") + "-|\n"
+    res += "|-" + cells.first.map { |w| "-" }.join("-|-") + "-|\n"
 
     res += cells[1..].map do |row|
       "| " + row.map_with_index do |cell, i|
-        cell.ljust(widths[i])
+        cell
       end.join(" | ") + " |"
     end.join("\n")
 
