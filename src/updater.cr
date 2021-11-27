@@ -82,7 +82,7 @@ class Updater
       begin
         pulls = JSON.parse res.body
       rescue e
-        pp res.body
+        pp res
         raise e
       end
 
@@ -93,7 +93,7 @@ class Updater
         begin
           pull_details = JSON.parse res.body
         rescue e
-          pp res.body
+          pp res
           raise e
         end
 
