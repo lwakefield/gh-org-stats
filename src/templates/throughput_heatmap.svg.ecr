@@ -1,0 +1,33 @@
+<svg version="1.1" width="<%= 320 + merge_throughput.values.first.size * 11%>" height="<%= 20 + 12 * merge_throughput.size %>" xmlns="http://www.w3.org/2000/svg">
+
+  <%- merge_throughput.keys.sort.each_with_index do |name, idx1| -%>
+    <text x="295" y="<%= 10 + (idx1 + 1) * 12 %>" font-size="12px" text-anchor="end"><%= name %></text>
+
+    <%- series = merge_throughput[name] -%>
+    <%- values = series.map{|v| v[1]} -%>
+    <%- max = values.max -%>
+    <%- min = values.min -%>
+
+    <%- series.each_with_index do |s, idx2| -%>
+      <%- date, val = s -%>
+      <rect
+        x="<%= 300 + (idx2) * 11 %>"
+        y="<%= 12 + idx1 * 12 %>"
+        width="10"
+        height="10"
+        onclick="navigator.clipboard.writeText('repo=<%= name %>, nummerges=<%= val %>, date=<%= date %>')"
+        <%- if val == 0 -%>
+          fill="rgb(235, 237, 240)"
+        <%- else -%>
+          fill="rgb(<%= Color.interpolate(
+            {155, 233, 168},
+            {33, 110, 57},
+            (val - min) / (max - min)
+          ).join(", ") %>)"
+        <%- end -%>
+      >
+        <title>repo=<%= name %>, nummerges=<%= val %>, date=<%= date %></title>
+      </rect>
+    <%- end -%>
+  <%- end -%>
+</svg>

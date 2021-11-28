@@ -1,7 +1,15 @@
+require "ecr"
+
+require "./color.cr"
+
 class Reporter
+  getter output_dir
+  def initialize (@output_dir="./report")
+  end
+
   def run
     db = DB.open "sqlite3://./data.db"
-    merged_prs_per_repo = db.query_all("
+    merged_prs = db.query_all("
       select
         owner,
         name,
@@ -34,12 +42,13 @@ class Reporter
       additions:       Int32,
       deletions:       Int32,
       changed_files:   Int32,
-    }).group_by do |pr|
+    })
+    merged_prs_per_repo = merged_prs.group_by do |pr|
       pr[:owner] + "/" + pr[:name]
     end
 
-    earliest = db.query_one "select min(merged_at) from gh_merged_pulls;", as: Time
-    latest = db.query_one "select max(merged_at) from gh_merged_pulls;", as: Time
+    earliest = merged_prs.map(&.[:merged_at]).min
+    latest   = merged_prs.map(&.[:merged_at]).max
 
     backbone = [] of Time
     merge_throughput = {} of String => Array(Tuple(Time, Int32))
@@ -73,82 +82,69 @@ class Reporter
       end
     end
 
-    merge_throughput_table = Table.new
-    merge_throughput_table.cells << [""] + backbone.map(&.to_s)
-    merge_throughput.map do |repo, series|
-      merge_throughput_table.cells << [repo] + series.map { |v| v[1].to_s }
-    end
+    Dir.mkdir_p(output_dir)
+    Dir.mkdir_p("#{output_dir}/charts")
 
-    p90_time_to_merge_table = Table.new
-    p90_time_to_merge_table.cells << [""] + backbone.map(&.to_s)
-    p90_time_to_merge.map do |repo, series|
-      p90_time_to_merge_table.cells << [repo] + series.map do |v|
-        res = ""
-        if v[1]
-          res += "#{v[1].not_nil!.days}d" if v[1].not_nil!.days > 0
-          res += "#{v[1].not_nil!.hours}h" if v[1].not_nil!.hours > 0
-          res += "#{v[1].not_nil!.minutes}m" if v[1].not_nil!.minutes > 0
-        end
-        res
-      end
-    end
+    write_throughput_heatmap(merge_throughput)
+    write_throughput_bars(merged_prs)
+    write_time_to_merge_bars(merged_prs)
+    File.write("#{output_dir}/readme.md", <<-HERE
+    protip: right click and "open image in new tab" to get tooltips + click to copy to clipboard.
 
-    p50_time_to_merge_table = Table.new
-    p50_time_to_merge_table.cells << [""] + backbone.map(&.to_s)
-    p50_time_to_merge.map do |repo, series|
-      p50_time_to_merge_table.cells << [repo] + series.map do |v|
-        res = ""
-        if v[1]
-          res += "#{v[1].not_nil!.days}d" if v[1].not_nil!.days > 0
-          res += "#{v[1].not_nil!.hours}h" if v[1].not_nil!.hours > 0
-          res += "#{v[1].not_nil!.minutes}m" if v[1].not_nil!.minutes > 0
-        end
-        res
-      end
-    end
+    # Merge Throughput: Total
 
-    puts "# Merge Throughput\n\n"
-    puts merge_throughput_table.to_markdown
-    puts "\n"
-    puts "# p90 Time To Merge\n\n"
-    puts p90_time_to_merge_table.to_markdown
-    puts "\n"
-    puts "# p50 Time To Merge\n\n"
-    puts p50_time_to_merge_table.to_markdown
-    puts "\n"
-  end
-end
+    <img src="./charts/throughput_bars.svg" />
 
-class Table
-  # first row is the header
-  property cells : Array(Array(String))
+    # Merge Throughput: Per Repository
 
-  def initialize
-    @cells = [] of Array(String)
+    <img src="./charts/throughput_heatmap.svg" />
+
+    # Mean Time To Merge:
+
+    <img src="./charts/time_to_merge_bars.svg" />
+    HERE
+    )
   end
 
-  # this makes it prettier, but inflates the file ~4x
-  def cell_widths
-    (0...cells.first.size).map do |i|
-      cells.map { |row| row[i].size }.max
-    end
+  def write_throughput_heatmap (merge_throughput)
+    File.write(
+      "#{output_dir}/charts/throughput_heatmap.svg",
+      ECR.render "#{__DIR__}/templates/throughput_heatmap.svg.ecr"
+    )
   end
 
-  def to_markdown
-    res = ""
+  def write_throughput_bars (merged_prs)
+    series = merged_prs.group_by do |v|
+      v[:merged_at].at_beginning_of_week
+    end.transform_values(&.size).to_a.sort_by(&.first)
 
-    res += "| " + cells.first.map_with_index do |header, i|
-      header
-    end.join(" | ") + " |\n"
+    fmt_tooltip = ->(x: Time, y: Int32) { "date=#{x}, merged=#{y}" }
+    File.write(
+      "#{output_dir}/charts/throughput_bars.svg",
+      ECR.render "#{__DIR__}/templates/bars.svg.ecr"
+    )
+  end
 
-    res += "|-" + cells.first.map { |w| "-" }.join("-|-") + "-|\n"
+  def write_time_to_merge_bars (merged_prs)
+    series = merged_prs.group_by do |v|
+      v[:merged_at].at_beginning_of_week
+    end.transform_values do |samples|
+      time_to_merge = samples.map{ |s| (s[:merged_at] - s[:opened_at]).total_seconds }
+      time_to_merge.sum / time_to_merge.size
+    end.to_a.sort_by(&.first)
 
-    res += cells[1..].map do |row|
-      "| " + row.map_with_index do |cell, i|
-        cell
-      end.join(" | ") + " |"
-    end.join("\n")
+    fmt_tooltip = ->(x: Time, y: Float64) {
+      span = Time::Span.new(seconds: y.to_i32)
+      span_fmt = ""
+      span_fmt += "#{span.days}d" if span.days > 0
+      span_fmt += "#{span.hours}h" if span.hours > 0
+      span_fmt += "#{span.minutes}m" if span.minutes > 0
 
-    res
+      "date=#{x}, time_to_merge=#{span_fmt}"
+    }
+    File.write(
+      "#{output_dir}/charts/time_to_merge_bars.svg",
+      ECR.render "#{__DIR__}/templates/bars.svg.ecr"
+    )
   end
 end

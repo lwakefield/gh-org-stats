@@ -1,0 +1,21 @@
+<svg version="1.1" width="<%= 20 + series.size * 11 %>" height="220" xmlns="http://www.w3.org/2000/svg">
+
+  <%- values = series.map{ |v| v[1] } -%>
+  <%- min, max = values.min, values.max -%>
+
+  <%- series.each_with_index do |s, idx| -%>
+    <%- x, y = s -%>
+    <%- height = (2 + 198 * (y - min) / (max - min)).floor %>
+    <%- tooltip = fmt_tooltip.call(x, y) %>
+    <rect
+      x="<%= 10 + idx * 11 %>"
+      y="<%= 210 - height %>"
+      width="10"
+      height="<%= height %>"
+      onclick="navigator.clipboard.writeText('<%= tooltip %>')"
+    >
+      <title><%= tooltip %></title>
+    </rect>
+  <%- end -%>
+
+</svg>
