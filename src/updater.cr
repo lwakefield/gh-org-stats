@@ -79,6 +79,16 @@ class Updater
 
     (startpage..).each do |page|
       res = client.get "/repos/#{owner}/#{repo}/pulls?per_page=100&page=#{page}&state=closed&sort=created&direction=asc"
+
+      if res.status_code == 404
+        Log.warn { "Repository #{owner}/#{repo} no longer exists" }
+        next
+      elsif res.success? == false
+        Log.error { "Error fetching #{owner}/#{repo}, received:\n#{res.body}" }
+        next
+      end
+
+
       begin
         pulls = JSON.parse res.body
       rescue e
