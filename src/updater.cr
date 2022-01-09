@@ -82,12 +82,11 @@ class Updater
 
       if res.status_code == 404
         Log.warn { "Repository #{owner}/#{repo} no longer exists" }
-        next
+        break
       elsif res.success? == false
         Log.error { "Error fetching #{owner}/#{repo}, received:\n#{res.body}" }
-        next
+        break
       end
-
 
       begin
         pulls = JSON.parse res.body
