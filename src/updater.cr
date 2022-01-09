@@ -86,7 +86,13 @@ class Updater
         raise e
       end
 
-      break if pulls.as_a.empty?
+      # to track down a bug...
+      begin
+        break if pulls.as_a.empty?
+      rescue e
+        pp pulls
+        raise e
+      end
 
       pulls.as_a.each do |pull|
         res = client.get "/repos/#{owner}/#{repo}/pulls/#{pull.as_h["number"].as_i}"
